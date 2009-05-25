@@ -27,31 +27,28 @@
       (binding [*print-level* @current-level
                 *print-length* @current-length]
         (.setText output-area (write obj :stream nil))))))
+
+(defmacro spinner-watcher [ref-name output-area]
+  `(proxy [ChangeListener] []
+     (stateChanged [evt#]
+       (let [val# (.. evt# (getSource) (getModel) (getValue))]
+         (dosync
+          (ref-set ~ref-name val#)
+          (pprint-obj ~output-area))))))
+
 (defn make-panel [panel]
   (let [output-area (doto (JTextArea. 25 80)
                       (.setEditable false)
                       (.setFont (java.awt.Font. "Monospaced" java.awt.Font/PLAIN 12)))
         layout (miglayout 
                 panel
-                :layout :debug
+                ;; :layout :debug
                 (JLabel. "Level")
                 (doto (JSpinner. (SpinnerNumberModel. @current-level 1 1000 1))
-                  (.addChangeListener
-                   (proxy [ChangeListener] []
-                     (stateChanged [evt]
-                                   (let [val (.. evt (getSource) (getModel) (getValue))]
-                                     (dosync
-                                      (ref-set current-level val)
-                                      (pprint-obj output-area)))))))
+                  (.addChangeListener (spinner-watcher current-level output-area)))
                 (JLabel. "Length")
                 (doto (JSpinner. (SpinnerNumberModel. @current-length 1 100000 1))
-                  (.addChangeListener
-                   (proxy [ChangeListener] []
-                     (stateChanged [evt]
-                                   (let [val (.. evt (getSource) (getModel) (getValue))]
-                                     (dosync
-                                      (ref-set current-length val)
-                                      (pprint-obj output-area))))))) :wrap
+                  (.addChangeListener (spinner-watcher current-length output-area))) :wrap
                 (JScrollPane. output-area) "spanx 4,growx,growy")]
     [layout output-area]))
 
@@ -72,6 +69,8 @@
 
  (binding [*print-level* 3 *print-length* 5] (doit build))
  (doit build)
+ ; (with-pprint-dispatch *simple-dispatch* (doit build))
+ 
  (def pw (find-ns 'clojure.contrib.pprint.PrettyWriter))
  (get-var ('-startBlock (ns-interns pw)))
 )
