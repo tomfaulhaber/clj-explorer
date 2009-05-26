@@ -7,7 +7,8 @@
            (javax.swing.event ChangeListener ))
   (:use clojure.contrib.miglayout
         clojure.xml
-        [clojure.contrib.pprint :only (write)]))
+        [clojure.contrib.pprint :only (write cl-format)]
+        [clojure.contrib.pprint.utilities :only (prlabel)]))
 
 (defn make-frame [title panel-fn]
   (let [[panel text-area] (panel-fn (JPanel.))] 
@@ -20,6 +21,30 @@
 (def current-level (ref 0))
 (def current-length (ref 0))
 (def current-object (ref nil))
+
+(declare process-sublists)
+
+(defn list-to-tree [l]
+  (let [[typ start-line start-col] (first l)]
+    (when (not (= typ :start))
+      (throw (Exception. "List in list to tree didn't begin with a start")))
+    (when (empty? (next l))
+      (throw (Exception. "No next in list")))
+    (let [[sublists remainder] (process-sublists (next l))]
+      (when (empty? remainder)
+        (throw (Exception. "No matching :end node in list")))
+      (let [[typ end-line end-col] (first remainder)]
+        (when (not (= typ :end))
+          (throw (Exception. "Remainder didn't begin with :end")))
+        [(concat [[start-line start-col] [end-line end-col]] sublists) (next remainder)]))))
+
+(defn process-sublists [l]
+  (loop [r l
+         acc []]
+    (if (or (nil? r) (not (= (first (first r)) :start)))
+      [acc r]
+      (let [[sublist r] (list-to-tree r)]
+        (recur r (conj acc sublist))))))
 
 (defn pprint-obj [output-area]
   (let [obj @current-object]
@@ -36,20 +61,47 @@
           (ref-set ~ref-name val#)
           (pprint-obj ~output-area))))))
 
+(comment ;; stuff for building the structure map
+  (import 'java.util.concurrent.LinkedBlockingQueue 'clojure.contrib.pprint.PrettyWriter)
+  (def q (LinkedBlockingQueue.))
+  (def pw (PrettyWriter. *out* 72 nil))
+  (.setLogicalBlockCallback pw #(.put q [% (.getLine pw) (.getColumn pw)]))
+;; do the write
+  (into [] (.toArray q)) 
+)
+
 (defn make-panel [panel]
-  (let [output-area (doto (JTextArea. 25 80)
+  (let [output-area (doto (JTextArea. 60 100)
                       (.setEditable false)
-                      (.setFont (java.awt.Font. "Monospaced" java.awt.Font/PLAIN 12)))
+                      (.setFont (java.awt.Font. "Monospaced" java.awt.Font/PLAIN 14)))
+        
         layout (miglayout 
                 panel
-                ;; :layout :debug
+                ;;:layout "debug"
+                :row "[][fill]"
                 (JLabel. "Level")
                 (doto (JSpinner. (SpinnerNumberModel. @current-level 1 1000 1))
                   (.addChangeListener (spinner-watcher current-level output-area)))
                 (JLabel. "Length")
                 (doto (JSpinner. (SpinnerNumberModel. @current-length 1 100000 1))
-                  (.addChangeListener (spinner-watcher current-length output-area))) :wrap
-                (JScrollPane. output-area) "spanx 4,growx,growy")]
+                  (.addChangeListener (spinner-watcher current-length output-area))) 
+                :wrap
+                (JScrollPane. output-area) "spanx 4,growx,growy"
+                )]
+    (.addMouseListener
+     output-area
+     (proxy [java.awt.event.MouseListener] []
+       (mouseEntered [evt])
+       (mouseExited [evt])
+       (mousePressed [evt])
+       (mouseReleased [evt])
+       (mouseClicked [evt]
+                     (let [pt (.getPoint evt)
+                           char-num (.viewToModel output-area pt)
+                           line (.getLineOfOffset output-area char-num)
+                           column (- char-num (.getLineStartOffset output-area line))]
+                       (cl-format *err* "Got point: (~d,~d). Translates to char ~d, line ~d, column ~d.~%"
+                                  (.x pt) (.y pt) char-num line column)))))
     [layout output-area]))
 
 
