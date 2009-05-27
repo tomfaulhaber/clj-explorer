@@ -4,10 +4,12 @@
   (:import (javax.swing JButton JFrame JLabel JList JPanel
                         JScrollPane JTabbedPane JTextField JSeparator
                         JTextArea JSpinner SpinnerNumberModel)
-           (javax.swing.event ChangeListener ))
+           (javax.swing.event ChangeListener)
+           (java.util.concurrent LinkedBlockingQueue)
+           (clojure.contrib.pprint PrettyWriter))
   (:use clojure.contrib.miglayout
         clojure.xml
-        [clojure.contrib.pprint :only (write cl-format)]
+        [clojure.contrib.pprint :only (write cl-format *print-right-margin*)]
         [clojure.contrib.pprint.utilities :only (prlabel)]))
 
 (defn make-frame [title panel-fn]
@@ -21,6 +23,7 @@
 (def current-level (ref 0))
 (def current-length (ref 0))
 (def current-object (ref nil))
+(def block-tree (ref nil))
 
 (declare process-sublists)
 
@@ -46,12 +49,32 @@
       (let [[sublist r] (list-to-tree r)]
         (recur r (conj acc sublist))))))
 
+(defn matches [node line col]
+  (let [[[start-line start-col] [end-line end-col]] node]
+    (and (or (> line start-line) (and (= line start-line) (>= col start-col)))
+         (or (< line end-line) (and (= line end-line) (<= col end-col))))))
+
+(defn search-tree [t line col]
+  (loop [subnodes (next (next t))
+         index 0]
+    (cond
+      (nil? subnodes) nil
+      (matches (first subnodes) line col) (cons index (search-tree (first subnodes) line col))
+      :else (recur (next subnodes) (inc index)))))
+
 (defn pprint-obj [output-area]
-  (let [obj @current-object]
+  (let [obj @current-object
+        q (LinkedBlockingQueue.)]
     (when obj 
-      (binding [*print-level* @current-level
-                *print-length* @current-length]
-        (.setText output-area (write obj :stream nil))))))
+      (with-open [sw (java.io.StringWriter.)
+                  writer (PrettyWriter. sw *print-right-margin* nil)] ;; TODO rethink args to match window
+        (.setLogicalBlockCallback writer #(.put q [% (.getLine writer) (.getColumn writer)]))
+        (binding [*print-level* @current-level
+                  *print-length* @current-length]
+          (write obj :stream writer)
+          (.setText output-area (str sw))
+          (dosync
+           (ref-set block-tree (first (list-to-tree (into [] (.toArray q)))))))))))
 
 (defmacro spinner-watcher [ref-name output-area]
   `(proxy [ChangeListener] []
@@ -61,20 +84,11 @@
           (ref-set ~ref-name val#)
           (pprint-obj ~output-area))))))
 
-(comment ;; stuff for building the structure map
-  (import 'java.util.concurrent.LinkedBlockingQueue 'clojure.contrib.pprint.PrettyWriter)
-  (def q (LinkedBlockingQueue.))
-  (def pw (PrettyWriter. *out* 72 nil))
-  (.setLogicalBlockCallback pw #(.put q [% (.getLine pw) (.getColumn pw)]))
-;; do the write
-  (into [] (.toArray q)) 
-)
 
 (defn make-panel [panel]
   (let [output-area (doto (JTextArea. 60 100)
                       (.setEditable false)
                       (.setFont (java.awt.Font. "Monospaced" java.awt.Font/PLAIN 14)))
-        
         layout (miglayout 
                 panel
                 ;;:layout "debug"
@@ -100,8 +114,10 @@
                            char-num (.viewToModel output-area pt)
                            line (.getLineOfOffset output-area char-num)
                            column (- char-num (.getLineStartOffset output-area line))]
-                       (cl-format *err* "Got point: (~d,~d). Translates to char ~d, line ~d, column ~d.~%"
-                                  (.x pt) (.y pt) char-num line column)))))
+                       (cl-format *err* "Got point: (~d,~d). Translates to char ~d, line ~d, column ~d.~%~
+                                             tree location = ~a~%"
+                                  (.x pt) (.y pt) char-num line column
+                                  (search-tree @block-tree line column))))))
     [layout output-area]))
 
 
