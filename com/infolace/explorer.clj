@@ -9,7 +9,7 @@
            (clojure.contrib.pprint PrettyWriter))
   (:use clojure.contrib.miglayout
         clojure.xml
-        [clojure.contrib.pprint :only (write cl-format *print-right-margin*)]
+        [clojure.contrib.pprint :only (write write-out cl-format *print-right-margin*)]
         [clojure.contrib.pprint.utilities :only (prlabel)]))
 
 (defn make-frame [title panel-fn]
@@ -24,6 +24,27 @@
 (def current-length (ref 0))
 (def current-object (ref nil))
 (def block-tree (ref nil))
+
+(defn nqsym
+  "var -> namespaced-qualified symbol"
+  [v]
+  (symbol (name (.getName (.ns v))) (name (.sym v))))
+
+;; TODO add body and undo bindings when we're done
+;; TODO try wrapping something private
+(defmacro wrapping-fn [bindings & body]
+  (let [pairs (partition 2 bindings)]
+    `(do
+      ~@(for [[f wrap] pairs]
+          `(let [nf# (nqsym #'~f)
+                 orig# ~f] 
+             (intern (symbol (namespace nf#)) (symbol (name nf#)) (partial ~wrap orig#))))
+      )))
+
+(comment
+  (wrapping-fn [write-out (fn [f obj] (cl-format true "hi") (f obj))])
+  (nqsym #'write-out)
+)
 
 (declare process-sublists)
 
