@@ -25,26 +25,36 @@
 (def current-object (ref nil))
 (def block-tree (ref nil))
 
-(defn nqsym
-  "var -> namespaced-qualified symbol"
-  [v]
-  (symbol (name (.getName (.ns v))) (name (.sym v))))
-
-;; TODO add body and undo bindings when we're done
-;; TODO try wrapping something private
 (defmacro wrapping-fn [bindings & body]
   (let [pairs (partition 2 bindings)]
     `(do
-      ~@(for [[f wrap] pairs]
-          `(let [nf# (nqsym #'~f)
-                 orig# ~f] 
-             (intern (symbol (namespace nf#)) (symbol (name nf#)) (partial ~wrap orig#))))
-      )))
+       (clojure.lang.Var/pushThreadBindings 
+        (into {}
+              [~@(for [[f wrap] pairs]
+                   `(let [orig# ~f] 
+                      [#'~f (partial ~wrap orig#)]))]))
+       (try
+        ~@body
+        (finally
+         (clojure.lang.Var/popThreadBindings))))))
 
+(def depth 0)
 (comment
-  (wrapping-fn [write-out (fn [f obj] (cl-format true "hi") (f obj))])
+  (binding [depth 0]
+    (wrapping-fn [write-out (fn [f obj] (cl-format true "*") (f obj))
+                  clojure.contrib.pprint.PrettyWriter/-startBlock 
+                  (fn [f this & args] 
+                    (set! depth (inc depth)) 
+                    (cl-format true "<~d" depth)
+                    (apply f this args))
+                  clojure.contrib.pprint.PrettyWriter/-endBlock 
+                  (fn [f this & args] 
+                    (set! depth (dec depth)) 
+                    (cl-format true ">~d" depth) 
+                    (apply f this args))]
+      (pprint '((a b) c))))
   (nqsym #'write-out)
-)
+  )
 
 (declare process-sublists)
 
