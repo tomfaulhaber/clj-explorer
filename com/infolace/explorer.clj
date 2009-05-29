@@ -20,10 +20,10 @@
      (.setVisible true))
     text-area))
 
-(def current-level (ref 0))
-(def current-length (ref 0))
+(def write-opts (ref {:level 0, :length 0}))
 (def current-object (ref nil))
 (def block-tree (ref nil))
+(def path-set (ref #()))
 
 (defmacro wrapping-fn [bindings & body]
   (let [pairs (partition 2 bindings)]
@@ -100,19 +100,17 @@
       (with-open [sw (java.io.StringWriter.)
                   writer (PrettyWriter. sw *print-right-margin* nil)] ;; TODO rethink args to match window
         (.setLogicalBlockCallback writer #(.put q [% (.getLine writer) (.getColumn writer)]))
-        (binding [*print-level* @current-level
-                  *print-length* @current-length]
-          (write obj :stream writer)
-          (.setText output-area (str sw))
-          (dosync
-           (ref-set block-tree (first (list-to-tree (into [] (.toArray q)))))))))))
+        (apply write obj :stream writer (into [] (mapcat identity @write-opts)))
+        (.setText output-area (str sw))
+        (dosync
+         (ref-set block-tree (first (list-to-tree (into [] (.toArray q))))))))))
 
-(defmacro spinner-watcher [ref-name output-area]
+(defmacro spinner-watcher [ref-key output-area]
   `(proxy [ChangeListener] []
      (stateChanged [evt#]
        (let [val# (.. evt# (getSource) (getModel) (getValue))]
          (dosync
-          (ref-set ~ref-name val#)
+          (alter write-opts assoc ~ref-key val#)
           (pprint-obj ~output-area))))))
 
 
@@ -125,11 +123,11 @@
                 ;;:layout "debug"
                 :row "[][fill]"
                 (JLabel. "Level")
-                (doto (JSpinner. (SpinnerNumberModel. @current-level 1 1000 1))
-                  (.addChangeListener (spinner-watcher current-level output-area)))
+                (doto (JSpinner. (SpinnerNumberModel. (:level @write-opts) 1 1000 1))
+                  (.addChangeListener (spinner-watcher :level output-area)))
                 (JLabel. "Length")
-                (doto (JSpinner. (SpinnerNumberModel. @current-length 1 100000 1))
-                  (.addChangeListener (spinner-watcher current-length output-area))) 
+                (doto (JSpinner. (SpinnerNumberModel. (:length @write-opts) 1 100000 1))
+                  (.addChangeListener (spinner-watcher :length output-area))) 
                 :wrap
                 (JScrollPane. output-area) "spanx 4,growx,growy"
                 )]
@@ -154,12 +152,14 @@
 
 (defn doit [obj]
   (dosync 
-   (ref-set current-level (or *print-level* 3))
-   (ref-set current-length (or *print-length* 5))
+   (ref-set write-opts {:level (or *print-level* 3) :length (or *print-length* 5)})
    (ref-set current-object obj))
   (let [output-area (make-frame "Clojure Object Explorer" make-panel)]
     (pprint-obj output-area)))
 
+(defn xml-convert [o] 
+  (into []
+        (concat [(:tag o) (:attrs o)] (for [x (:content o)] (xml-convert x)))))
 
 (comment
  (doit nil)
