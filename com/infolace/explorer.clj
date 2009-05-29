@@ -110,8 +110,7 @@
      (stateChanged [evt#]
        (let [val# (.. evt# (getSource) (getModel) (getValue))]
          (dosync
-          (alter write-opts assoc ~ref-key val#)
-          (pprint-obj ~output-area))))))
+          (alter write-opts assoc ~ref-key val#))))))
 
 
 (defn make-panel [panel]
@@ -154,7 +153,10 @@
   (dosync 
    (ref-set write-opts {:level (or *print-level* 3) :length (or *print-length* 5)})
    (ref-set current-object obj))
-  (let [output-area (make-frame "Clojure Object Explorer" make-panel)]
+  (let [output-area (make-frame "Clojure Object Explorer" make-panel)
+        do-write (fn [_ _ _ _] (pprint-obj output-area))]
+    (add-watch write-opts (gensym) do-write)
+    (add-watch current-object (gensym) do-write)
     (pprint-obj output-area)))
 
 (defn xml-convert [o] 
@@ -168,7 +170,10 @@
 
  (binding [*print-level* 3 *print-length* 5] (doit build))
  (doit build)
- ; (with-pprint-dispatch *simple-dispatch* (doit build))
+ (dosync (alter write-opts assoc :level 10))
+ (dosync (ref-set current-object (xml-convert build)))
+ (dosync (alter write-opts assoc :dispatch xml-dispatch))
+ 
  
  (def pw (find-ns 'clojure.contrib.pprint.PrettyWriter))
  (get-var ('-startBlock (ns-interns pw)))
