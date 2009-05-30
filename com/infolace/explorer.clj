@@ -9,7 +9,7 @@
            (clojure.contrib.pprint PrettyWriter))
   (:use clojure.contrib.miglayout
         clojure.xml
-        [clojure.contrib.pprint :only (write write-out cl-format *print-right-margin*)]
+        [clojure.contrib.pprint :only (write write-out cl-format *print-right-margin* level-exceeded)]
         [clojure.contrib.pprint.utilities :only (prlabel)]))
 
 (defn make-frame [title panel-fn]
@@ -23,7 +23,7 @@
 (def write-opts (ref {:level 0, :length 0}))
 (def current-object (ref nil))
 (def block-tree (ref nil))
-(def path-set (ref #()))
+(def path-set (ref #{}))
 (def update-from-ui false)
 
 (defmacro wrapping-fn [bindings & body]
@@ -94,6 +94,7 @@
       (matches (first subnodes) line col) (cons index (search-tree (first subnodes) line col))
       :else (recur (next subnodes) (inc index)))))
 
+(def stack nil)
 (defn pprint-obj [output-area]
   (let [obj @current-object
         q (LinkedBlockingQueue.)]
@@ -101,11 +102,34 @@
       (with-open [sw (java.io.StringWriter.)
                   writer (PrettyWriter. sw *print-right-margin* nil)] ;; TODO rethink args to match window
         (.setLogicalBlockCallback writer #(.put q [% (.getLine writer) (.getColumn writer)]))
-        (apply write obj :stream writer (into [] (mapcat identity @write-opts)))
+        (binding [stack '()]
+          (wrapping-fn [level-exceeded 
+                        (fn [f] ;(cl-format true "*") 
+                          (if (get @path-set (rest stack)) 
+                            (let [level (count stack)]
+                              (if (>= level *print-level*)
+                                (binding [*print-level* (inc level)]
+                                  false)
+                                (f))) 
+                            (f)))
+                        clojure.contrib.pprint.PrettyWriter/-startBlock 
+                        (fn [f this & args] 
+                          (set! stack (cons -1 (if (seq stack)
+                                                 (cons (inc (first stack)) (rest stack))
+                                                 '()))) 
+                          ;(cl-format true "<~a>" (rest stack))
+                          (apply f this args))
+                        clojure.contrib.pprint.PrettyWriter/-endBlock 
+                        (fn [f this & args] 
+                          (set! stack (rest stack)) 
+                          ;(cl-format true ">") 
+                          (apply f this args))]
+            (apply write obj :stream writer (into [] (mapcat identity @write-opts)))))
         (.setText output-area (str sw))
         (dosync
          (ref-set block-tree (first (list-to-tree (into [] (.toArray q))))))))))
 
+;;; TODO: This shouldn't be a macro!
 (defmacro spinner-watcher [ref-key]
   `(proxy [ChangeListener] []
     (stateChanged [evt#]
@@ -123,7 +147,7 @@
                         (.addChangeListener (spinner-watcher :level)))
         options-update-key (gensym)
         length-spinner (doto (JSpinner. (SpinnerNumberModel. (:length @write-opts) 1 100000 1))
-                  (.addChangeListener (spinner-watcher :length)))
+                         (.addChangeListener (spinner-watcher :length)))
         layout (miglayout 
                 panel
                 ;;:layout "debug"
@@ -151,11 +175,17 @@
                      (let [pt (.getPoint evt)
                            char-num (.viewToModel output-area pt)
                            line (.getLineOfOffset output-area char-num)
-                           column (- char-num (.getLineStartOffset output-area line))]
+                           column (- char-num (.getLineStartOffset output-area line))
+                           location (reverse (search-tree @block-tree line column))]
                        (cl-format *err* "Got point: (~d,~d). Translates to char ~d, line ~d, column ~d.~%~
                                              tree location = ~a~%"
                                   (.x pt) (.y pt) char-num line column
-                                  (search-tree @block-tree line column))))))
+                                  location)
+                       (when location
+                         (dosync
+                          (if (get @path-set location)
+                            (alter path-set disj location)
+                            (alter path-set conj location))))))))
     [layout output-area]))
 
 
@@ -167,11 +197,16 @@
         do-write (fn [_ _ _ _] (pprint-obj output-area))]
     (add-watch write-opts (gensym) do-write)
     (add-watch current-object (gensym) do-write)
+    (add-watch path-set (gensym) do-write)
     (pprint-obj output-area)))
 
 (defn xml-convert [o] 
   (into []
-        (concat [(:tag o) (:attrs o)] (for [x (:content o)] (xml-convert x)))))
+        (concat [(:tag o) (:attrs o)]
+                (for [x (:content o)]
+                  (cond 
+                    (string? x) x
+                    :else (xml-convert x))))))
 
 (comment
  (doit nil)
