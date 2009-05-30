@@ -24,6 +24,7 @@
 (def current-object (ref nil))
 (def block-tree (ref nil))
 (def path-set (ref #()))
+(def update-from-ui false)
 
 (defmacro wrapping-fn [bindings & body]
   (let [pairs (partition 2 bindings)]
@@ -105,31 +106,40 @@
         (dosync
          (ref-set block-tree (first (list-to-tree (into [] (.toArray q))))))))))
 
-(defmacro spinner-watcher [ref-key output-area]
+(defmacro spinner-watcher [ref-key]
   `(proxy [ChangeListener] []
-     (stateChanged [evt#]
-       (let [val# (.. evt# (getSource) (getModel) (getValue))]
-         (dosync
-          (alter write-opts assoc ~ref-key val#))))))
+    (stateChanged [evt#]
+      (let [val# (.. evt# (getSource) (getModel) (getValue))]
+        (dosync
+         (binding [update-from-ui true]
+           (alter write-opts assoc ~ref-key val#)))))))
 
-
+;; TODO: clean up watches when we close the window
 (defn make-panel [panel]
   (let [output-area (doto (JTextArea. 60 100)
                       (.setEditable false)
                       (.setFont (java.awt.Font. "Monospaced" java.awt.Font/PLAIN 14)))
+        level-spinner (doto (JSpinner. (SpinnerNumberModel. (:level @write-opts) 1 1000 1))
+                        (.addChangeListener (spinner-watcher :level)))
+        options-update-key (gensym)
+        length-spinner (doto (JSpinner. (SpinnerNumberModel. (:length @write-opts) 1 100000 1))
+                  (.addChangeListener (spinner-watcher :length)))
         layout (miglayout 
                 panel
                 ;;:layout "debug"
                 :row "[][fill]"
                 (JLabel. "Level")
-                (doto (JSpinner. (SpinnerNumberModel. (:level @write-opts) 1 1000 1))
-                  (.addChangeListener (spinner-watcher :level output-area)))
+                level-spinner
                 (JLabel. "Length")
-                (doto (JSpinner. (SpinnerNumberModel. (:length @write-opts) 1 100000 1))
-                  (.addChangeListener (spinner-watcher :length output-area))) 
+                length-spinner 
                 :wrap
                 (JScrollPane. output-area) "spanx 4,growx,growy"
                 )]
+    (add-watch write-opts options-update-key
+               (fn [_ _ _ new] 
+                 (when (not update-from-ui)
+                   (.setValue level-spinner (:level new))
+                   (.setValue length-spinner (:length new)))))
     (.addMouseListener
      output-area
      (proxy [java.awt.event.MouseListener] []
