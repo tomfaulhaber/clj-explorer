@@ -1,0 +1,45 @@
+<project name="explorer" default="jar">
+
+  <description>
+    Build a jar that is the clj-explorer
+  </description>
+
+  <property name="build" location="classes"/>
+	<property name="clojure-jar" location="../clojure/clojure.jar"/>
+  <!-- The JAR file to create. -->
+  <property name="jarfile" value="explorer.jar"/>
+	
+  <target name="init">
+    <mkdir dir="${build}"/>
+  </target>
+
+  <target name="clean"
+          description="Remove generated files and directories.">
+    <delete file="${jarfile}"/>
+		<delete dir="${build}"/>
+  </target>
+
+  <target name="jar" depends="compile_classes"
+          description="Create jar file.">
+    <jar jarfile="${jarfile}">
+      <fileset dir="." includes="epl-v10.html"/>
+      <fileset dir="." includes="com/infolace/explorer.clj"/>
+      <fileset dir="." includes="com/infolace/pprint.clj"/>
+      <fileset dir="." includes="com/infolace/pprint/cl-format.clj"/>
+      <fileset dir="." includes="com/infolace/pprint/pprint_base.clj"/>
+      <fileset dir="." includes="com/infolace/pprint/dispatch.clj"/>
+      <fileset dir="." includes="com/infolace/pprint/utilities.clj"/>
+      <fileset dir="classes" includes="**/*.class"/>
+    </jar>
+  </target>
+
+	<target name="compile_classes" depends="init"
+					description="Compile clojure classes.">
+		<java classname="clojure.lang.Compile"
+          classpath=".:${build}:${clojure-jar}">
+      <sysproperty key="clojure.compile.path" value="${build}"/>
+      <arg value="com.infolace.pprint.ColumnWriter"/>
+      <arg value="com.infolace.pprint.PrettyWriter"/>
+		</java>
+  </target>
+</project>
