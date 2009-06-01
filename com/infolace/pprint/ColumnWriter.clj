@@ -20,6 +20,7 @@
    :constructors {[java.io.Writer Integer] [], 
                   [java.io.Writer] []}
    :methods [[getColumn [] Integer]
+             [getLine [] Integer]
              [getMaxColumn [] Integer]
              [setMaxColumn [Integer] Void]
              [getWriter [] java.io.Writer]]
@@ -29,7 +30,7 @@
 
 (defn- -init 
   ([writer] (-init writer *default-page-width*))
-  ([writer max-columns] [[] (ref {:max max-columns, :cur 0, :base writer})]))
+  ([writer max-columns] [[] (ref {:max max-columns, :cur 0, :line 0, :base writer})]))
 
 (defn- get-field [#^com.infolace.pprint.ColumnWriter this sym]
   (sym @(.state this)))
@@ -39,6 +40,9 @@
 
 (defn- -getColumn [this]
   (get-field this :cur))
+
+(defn- -getLine [this]
+  (get-field this :line))
 
 (defn- -getMaxColumn [this]
   (get-field this :max))
@@ -62,7 +66,10 @@
 	     nl (.lastIndexOf s (int \newline))]
 	 (dosync (if (neg? nl)
 		   (set-field this :cur (+ (get-field this :cur) (count s)))
-		   (set-field this :cur (- (count s) nl 1))))
+		   (do
+                     (set-field this :cur (- (count s) nl 1))
+                     (set-field this :line (+ (get-field this :line)
+                                              (count (filter #(= % \newline) s)))))))
 	 (.write #^java.io.Writer (get-field this :base) s))
 
        Integer
@@ -70,7 +77,9 @@
 
 (defn- write-char [#^com.infolace.pprint.ColumnWriter this #^Integer c]
   (dosync (if (= c (int \newline))
-	    (set-field this :cur 0)
+	    (do
+              (set-field this :cur 0)
+              (set-field this :line (inc (get-field this :line))))
 	    (set-field this :cur (inc (get-field this :cur)))))
   (.write #^java.io.Writer (get-field this :base) c))
 

@@ -25,7 +25,8 @@
              [newline [clojure.lang.Keyword] void]
              [indent [clojure.lang.Keyword Integer] void]
              [getMiserWidth [] Object]
-             [setMiserWidth [Object] void]]
+             [setMiserWidth [Object] void]
+             [setLogicalBlockCallback [clojure.lang.IFn] void]]
    :exposes-methods {write col-write}
    :state pwstate))
 
@@ -62,7 +63,8 @@
 (defstruct #^{:private true} logical-block
            :parent :section :start-col :indent
            :done-nl :intra-block-nl
-           :prefix :per-line-prefix :suffix)
+           :prefix :per-line-prefix :suffix
+           :logical-block-callback)
 
 (defn ancestor? [parent child]
   (loop [child (:parent child)]
@@ -121,15 +123,17 @@
 
 (defmulti write-token #(:type-tag %2))
 (defmethod write-token :start-block [#^com.infolace.pprint.PrettyWriter this token]
+  (when-let [cb (getf :logical-block-callback)] (cb :start))
   (let [lb (:logical-block token)]
     (dosync
-     (if-let [#^String prefix (:prefix lb)] 
+     (when-let [#^String prefix (:prefix lb)] 
        (.col-write this prefix))
      (let [col (.getColumn this)]
        (ref-set (:start-col lb) col)
        (ref-set (:indent lb) col)))))
 
 (defmethod write-token :end-block [#^com.infolace.pprint.PrettyWriter this token]
+  (when-let [cb (getf :logical-block-callback)] (cb :end))
   (if-let [#^String suffix (:suffix (:logical-block token))] 
     (.col-write this suffix)))
 
@@ -408,7 +412,7 @@
 ;;; Methods for PrettyWriter
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn- -startBlock 
+(defn -startBlock 
   [#^com.infolace.pprint.PrettyWriter this 
    #^String prefix #^String per-line-prefix #^String suffix]
   (dosync 
@@ -419,6 +423,7 @@
      (if (= (getf :mode) :writing)
        (do
          (write-white-space this)
+         (when-let [cb (getf :logical-block-callback)] (cb :start))
          (if prefix 
            (.col-write this prefix))
          (let [col (.getColumn this)]
@@ -426,14 +431,15 @@
            (ref-set (:indent lb) col)))
        (add-to-buffer this (make-start-block lb))))))
 
-(defn- -endBlock [#^com.infolace.pprint.PrettyWriter this]
+(defn -endBlock [#^com.infolace.pprint.PrettyWriter this]
   (dosync
    (let [lb (getf :logical-blocks)]
      (if (= (getf :mode) :writing)
        (do
          (write-white-space this)
          (if-let [#^String suffix (:suffix lb)]
-           (.col-write this suffix)))
+           (.col-write this suffix))
+         (when-let [cb (getf :logical-block-callback)] (cb :end)))
        (add-to-buffer this (make-end-block lb)))
      (setf :logical-blocks (:parent lb)))))
 
@@ -459,4 +465,7 @@
 
 (defn- -setMiserWidth [#^com.infolace.pprint.PrettyWriter this new-miser-width]
   (dosync (setf :miser-width new-miser-width)))
+
+(defn- -setLogicalBlockCallback [#^com.infolace.pprint.PrettyWriter this f]
+  (dosync (setf :logical-block-callback f)))
 
