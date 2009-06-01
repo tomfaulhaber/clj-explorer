@@ -100,7 +100,7 @@
         q (LinkedBlockingQueue.)]
     (when obj 
       (with-open [sw (java.io.StringWriter.)
-                  writer (PrettyWriter. sw *print-right-margin* nil)] ;; TODO rethink args to match window
+                  writer (PrettyWriter. sw *print-right-margin* nil)]
         (.setLogicalBlockCallback writer #(.put q [% (.getLine writer) (.getColumn writer)]))
         (binding [stack '()]
           (wrapping-fn [level-exceeded 
@@ -141,7 +141,8 @@
 (defn make-panel [panel]
   (let [output-area (doto (JTextArea. 60 100)
                       (.setEditable false)
-                      (.setFont (java.awt.Font. "Monospaced" java.awt.Font/PLAIN 14)))
+                      (.setFont (java.awt.Font. "Monospaced" java.awt.Font/PLAIN 14))
+                      (.setLineWrap true))
         level-spinner (doto (JSpinner. (SpinnerNumberModel. (:level @write-opts) 1 1000 1))
                         (.addChangeListener (spinner-watcher :level)))
         options-update-key (gensym)
@@ -156,8 +157,19 @@
                 (JLabel. "Length")
                 length-spinner 
                 :wrap
-                (JScrollPane. output-area) "spanx 4,growx,growy"
-                )]
+                (doto (JScrollPane. output-area)
+                      (.addComponentListener
+                       (proxy [java.awt.event.ComponentListener] []
+                         (componentHidden [evt])
+                         (componentMoved [evt])
+                         (componentResized [evt]
+                                           (let [w (.. evt (getSource) (getViewport) (getExtentSize) (getWidth))
+                                                 ps (.. output-area (getPreferredSize) (getWidth))
+                                                 pcols (.getColumns output-area)
+                                                 cols (quot w (quot ps pcols))
+                                                 margin (max 15 (- cols 10))]
+                                             (dosync (alter write-opts assoc :right-margin margin))))
+                         (componentShown [evt])))) "spanx 4,growx,growy")]
     (add-watch write-opts options-update-key
                (fn [_ _ _ new] 
                  (when (not update-from-ui)
