@@ -129,14 +129,13 @@
         (dosync
          (ref-set block-tree (first (list-to-tree (into [] (.toArray q))))))))))
 
-;;; TODO: This shouldn't be a macro!
-(defmacro spinner-watcher [ref-key]
-  `(proxy [ChangeListener] []
-    (stateChanged [evt#]
-      (let [val# (.. evt# (getSource) (getModel) (getValue))]
+(defn spinner-watcher [ref-key]
+  (proxy [ChangeListener] []
+    (stateChanged [evt]
+      (let [val (.. evt (getSource) (getModel) (getValue))]
         (dosync
          (binding [update-from-ui true]
-           (alter write-opts assoc ~ref-key val#)))))))
+           (alter write-opts assoc ref-key val)))))))
 
 ;; TODO: clean up watches when we close the window
 (defn make-panel [panel]
