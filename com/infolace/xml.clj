@@ -57,11 +57,12 @@
 
 (defmethod print-xml-tag :default [tag attrs contents]
   (let [tag-name (as-str tag)
-        xlated-attrs (map #(vector (as-str (key %)) (as-str (val %))) attrs)]
+        xlated-attrs (map #(vector [(as-str (key %)) (as-str (val %))]) attrs)]
+    (prlabel pxt xlated-attrs)
     (if (seq contents)
-      ((formatter-out "~<~<<~a~1:i~{ ~:_~{~a=\"~a\"~}~}>~:>~vi~{~_~w~}~0i~_</~a>~:>")
-       [[tag-name xlated-attrs] *prxml-indent* contents tag-name])
-      ((formatter-out "~<<~a~1:i~{~:_ ~{~a=\"~a\"~}~}/>~:>") [tag-name xlated-attrs]))))
+      ((formatter-out "~<<~a~1:i~{ ~:_~<~{~a=\"~a\"~}~:>~}>~vi~{~_~w~}~0i~_</~a>~:>")
+       [tag-name xlated-attrs *prxml-indent* contents tag-name])
+      ((formatter-out "~<<~a~1:i~{~:_ ~<~{~a=\"~a\"~}~:>~}/>~:>") [tag-name xlated-attrs]))))
 
 
 (defmulti xml-dispatch class)
