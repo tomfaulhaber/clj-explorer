@@ -6,11 +6,11 @@
                         JTextArea JSpinner SpinnerNumberModel)
            (javax.swing.event ChangeListener)
            (java.util.concurrent LinkedBlockingQueue)
-           (clojure.contrib.pprint PrettyWriter))
+           (com.infolace.pprint PrettyWriter))
   (:use clojure.contrib.miglayout
         clojure.xml
-        [clojure.contrib.pprint :only (write write-out cl-format *print-right-margin* level-exceeded)]
-        [clojure.contrib.pprint.utilities :only (prlabel)]))
+        [com.infolace.pprint :only (write write-out cl-format *print-right-margin* level-exceeded)]
+        [com.infolace.pprint.utilities :only (prlabel)]))
 
 (defn make-frame [title panel-fn]
   (let [[panel text-area] (panel-fn (JPanel.))] 
