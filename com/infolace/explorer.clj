@@ -203,7 +203,7 @@
   (into []
         (concat [(:tag o) (:attrs o)]
                 (for [x (:content o)]
-                  (cond 
+                  (cond
                     (string? x) x
                     :else (xml-convert x))))))
 
