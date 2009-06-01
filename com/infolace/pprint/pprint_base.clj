@@ -190,6 +190,8 @@ The following keyword arguments can be passed with values:
                           optval)]
         (if *print-pretty*
           (with-pretty-writer base-writer
+            ;;TODO type hint!
+            (.setMaxColumn *out* *print-right-margin*)
             (write-out object))
           (binding [*out* base-writer]
             (pr object)))
