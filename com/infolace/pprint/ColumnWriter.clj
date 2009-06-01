@@ -48,7 +48,8 @@
   (get-field this :max))
 
 (defn- -setMaxColumn [this new-max]
-  (dosync (set-field this :max new-max)))
+  (dosync (set-field this :max new-max))
+  nil)
 
 (defn- -getWriter [this]
   (get-field this :base))
