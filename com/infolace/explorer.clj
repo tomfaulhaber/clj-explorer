@@ -43,12 +43,12 @@
 (comment
   (binding [depth 0]
     (wrapping-fn [write-out (fn [f obj] (cl-format true "*") (f obj))
-                  clojure.contrib.pprint.PrettyWriter/-startBlock 
+                  com.infolace.pprint.PrettyWriter/-startBlock 
                   (fn [f this & args] 
                     (set! depth (inc depth)) 
                     (cl-format true "<~d" depth)
                     (apply f this args))
-                  clojure.contrib.pprint.PrettyWriter/-endBlock 
+                  com.infolace.pprint.PrettyWriter/-endBlock 
                   (fn [f this & args] 
                     (set! depth (dec depth)) 
                     (cl-format true ">~d" depth) 
@@ -112,14 +112,14 @@
                                   false)
                                 (f))) 
                             (f)))
-                        clojure.contrib.pprint.PrettyWriter/-startBlock 
+                        com.infolace.pprint.PrettyWriter/-startBlock 
                         (fn [f this & args] 
                           (set! stack (cons -1 (if (seq stack)
                                                  (cons (inc (first stack)) (rest stack))
                                                  '()))) 
                           ;(cl-format true "<~a>" (rest stack))
                           (apply f this args))
-                        clojure.contrib.pprint.PrettyWriter/-endBlock 
+                        com.infolace.pprint.PrettyWriter/-endBlock 
                         (fn [f this & args] 
                           (set! stack (rest stack)) 
                           ;(cl-format true ">") 
@@ -220,6 +220,6 @@
  (dosync (alter write-opts assoc :dispatch xml-dispatch))
  
  
- (def pw (find-ns 'clojure.contrib.pprint.PrettyWriter))
+ (def pw (find-ns 'com.infolace.pprint.PrettyWriter))
  (get-var ('-startBlock (ns-interns pw)))
 )
