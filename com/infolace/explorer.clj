@@ -208,17 +208,21 @@
                     :else (xml-convert x))))))
 
 (comment
- (doit nil)
+  (doit nil)
+  (do
+    (refer 'com.infolace.explorer)
+    (use 'clojure.contrib.repl-utils)
+    (use 'clojure.contrib.duck-streams)
+    (use 'com.infolace.xml)
+    (use 'clojure.xml))
 
- (def build (parse (java.io.File. "../clojure/build.xml")))
+  (def build (parse (java.io.File. "../clojure/build.xml")))
 
- (binding [*print-level* 3 *print-length* 5] (doit build))
- (doit build)
- (dosync (alter write-opts assoc :level 10))
- (dosync (ref-set current-object (xml-convert build)))
- (dosync (alter write-opts assoc :dispatch xml-dispatch))
+  (doit build)
+
+  (dosync (alter write-opts assoc :level 10))
+  (dosync (ref-set current-object (xml-convert build)))
+  (dosync (alter write-opts assoc :dispatch xml-dispatch))
  
  
- (def pw (find-ns 'com.infolace.pprint.PrettyWriter))
- (get-var ('-startBlock (ns-interns pw)))
-)
+  )
