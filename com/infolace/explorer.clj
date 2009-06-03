@@ -237,5 +237,13 @@
   (dosync (ref-set current-object (xml-convert build)))
   (dosync (alter write-opts assoc :dispatch xml-dispatch))
  
+  (do
+    (doit build)
+
+    (dosync (ref-set current-object (xml-convert build)))
+    (dosync (alter write-opts assoc :dispatch xml-dispatch))
+    (dosync (alter write-opts assoc :length 1000)))
+
+  (dosync (alter write-opts dissoc :dispatch))
  
   )
