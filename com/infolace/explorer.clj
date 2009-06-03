@@ -233,6 +233,7 @@
   (doit build)
 
   (dosync (alter write-opts assoc :level 10))
+  (dosync (alter write-opts assoc :level 2))
   (dosync (ref-set current-object (xml-convert build)))
   (dosync (alter write-opts assoc :dispatch xml-dispatch))
  
