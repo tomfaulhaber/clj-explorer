@@ -139,7 +139,7 @@
 
 ;; TODO: clean up watches when we close the window
 (defn make-panel [panel]
-  (let [output-area (doto (JTextArea. 60 100)
+  (let [output-area (doto (JTextArea. 20 100)
                       (.setEditable false)
                       (.setFont (java.awt.Font. "Monospaced" java.awt.Font/PLAIN 14))
                       (.setLineWrap true))
