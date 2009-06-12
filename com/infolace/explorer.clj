@@ -200,7 +200,7 @@
     [layout output-area]))
 
 
-(defn doit [obj]
+(defn explorer [obj]
   (dosync 
    (ref-set write-opts {:level (or *print-level* 3) :length (or *print-length* 5)})
    (ref-set current-object obj))
@@ -220,7 +220,7 @@
                     :else (xml-convert x))))))
 
 (comment
-  (doit nil)
+  (explorer nil)
   (do
     (refer 'com.infolace.explorer)
     (use 'clojure.contrib.repl-utils)
@@ -230,20 +230,20 @@
 
   (def build (parse (java.io.File. "../clojure/build.xml")))
 
-  (doit build)
+  (explorer build)
 
   (dosync (alter write-opts assoc :level 10))
   (dosync (alter write-opts assoc :level 2))
   (dosync (ref-set current-object (xml-convert build)))
   (dosync (alter write-opts assoc :dispatch xml-dispatch))
+  (dosync (alter write-opts dissoc :dispatch))
  
   (do
-    (doit build)
+    (explorer build)
 
     (dosync (ref-set current-object (xml-convert build)))
     (dosync (alter write-opts assoc :dispatch xml-dispatch))
     (dosync (alter write-opts assoc :length 1000)))
 
-  (dosync (alter write-opts dissoc :dispatch))
  
   )
